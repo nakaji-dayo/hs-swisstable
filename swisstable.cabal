@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e25755b60b3830272e251b6246bc7dce140f60af8222be7ec41c7529ec2715ee
+-- hash: b30fb078b8f3afae0adbdd5f19f9f4773a964e5782a841b68a6c899b8e64b84b
 
 name:           swisstable
 version:        0.1.0.0
@@ -37,6 +37,9 @@ library
       csrc/simd.c
   build-depends:
       base >=4.7 && <5
+    , hashable
+    , primitive
+    , vector
     , wide-word
   default-language: Haskell2010
 
@@ -50,6 +53,9 @@ test-suite swisstable-test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , hashable
+    , primitive
     , swisstable
+    , vector
     , wide-word
   default-language: Haskell2010

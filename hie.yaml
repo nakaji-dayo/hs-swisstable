@@ -1,0 +1,7 @@
+cradle:
+  stack:
+    - path: "./src"
+      component: "swisstable:lib"
+
+    - path: "./test"
+      component: "swisstable:test:swisstable-test"
