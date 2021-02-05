@@ -31,7 +31,7 @@ library:
   c-sources:
     - csrc/simd.c
   ghc-options:
-    - -optc -mavx2
+    - "-optc -mavx2"
 
 # executables:
 #   swisstable-exe:
@@ -54,3 +54,6 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - swisstable
+    - tasty-discover
+    - tasty
+    - tasty-hunit

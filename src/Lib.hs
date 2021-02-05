@@ -41,28 +41,17 @@ f = do
 initialCap = 8
 
 data Table s k = Table
- { elems :: MutableArray s (Maybe String)
+ { elems :: MutableArray s (Maybe k)
  , ctrl  :: MutablePrimArray s Word8
  , size  :: Int
  }
 
-testks = ["A","Z", "C", "Y", "E", "X", "G", "W"]
-
-test :: IO ()
-test = do
-  es <- A.newArray initialCap (Nothing :: Maybe String)
+new = do
+  es <- A.newArray initialCap Nothing
   c <- newPinnedPrimArray (initialCap + 32)
   setPrimArray c 0 initialCap 128
-  let t = Table es c (fromIntegral initialCap)
-  mapM_ (`insert` t) testks
-  ia <- freezeArray  (elems t) 0 (sizeofMutableArray $ elems t)
-  print ia
-  ictrl <- freezePrimArray (ctrl t) 0 initialCap
-  print ictrl
-  print  "-----------"
-  forM_ testks $ \k -> do
-    h <- lookup'' k t
-    print (k, h)
+  print 8
+  pure $ Table es c (fromIntegral initialCap)
 
 insert k m = do
   let h = hash k

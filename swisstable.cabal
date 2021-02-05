@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: b30fb078b8f3afae0adbdd5f19f9f4773a964e5782a841b68a6c899b8e64b84b
+-- hash: 92e88fd4e3490af5b91eaae5da690e02b381b510ddb58bdbeb5054d130ad7eea
 
 name:           swisstable
 version:        0.1.0.0
@@ -47,6 +47,7 @@ test-suite swisstable-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      Test.Basic
       Paths_swisstable
   hs-source-dirs:
       test
@@ -56,6 +57,9 @@ test-suite swisstable-test
     , hashable
     , primitive
     , swisstable
+    , tasty
+    , tasty-discover
+    , tasty-hunit
     , vector
     , wide-word
   default-language: Haskell2010
