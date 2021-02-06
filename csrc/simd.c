@@ -25,6 +25,10 @@ int _elm_cmp_vec(char elem, char *src){
   return dst;
 }
 
+int _load_movemask(char *src) {
+  return _mm256_movemask_epi8(_mm256_loadu_si256((__m256i*)src));
+}
+
 
 void printBits(size_t const size, void const * const ptr)
 {

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 92e88fd4e3490af5b91eaae5da690e02b381b510ddb58bdbeb5054d130ad7eea
+-- hash: 17dcf5d2c5c72533b106d1185d42e6cb2c8de22221e49aba044d216c172a511d
 
 name:           swisstable
 version:        0.1.0.0
@@ -51,7 +51,7 @@ test-suite swisstable-test
       Paths_swisstable
   hs-source-dirs:
       test
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -optc -mavx2
   build-depends:
       base >=4.7 && <5
     , hashable
