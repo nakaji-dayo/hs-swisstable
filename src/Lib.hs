@@ -1,6 +1,7 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE LambdaCase #-}
-{-# OPTIONS_GHC -Wno-deferred-type-errors #-}
 module Lib where
 
 import           Data.Word
@@ -33,19 +34,17 @@ import           Debug.Trace
 import GHC.Stack (HasCallStack)
 import Data.STRef
 
-foreign import ccall "_elm_cmp_vec" cElmCmpVec :: Word8 -> Ptr Word8 -> Word32
-foreign import ccall "_load_movemask" cLoadMovemask :: Ptr Word8 -> Word32
-foreign import ccall "ffs" cFfs :: Word32 -> Int
-foreign import ccall "_elm_add_movemask" cElmAddMovemask :: Word8 -> Ptr Word8 -> Word32
+import GHC.Generics (Generic)
+import Control.DeepSeq (NFData)
+
+-- todo: try foreign import prim
+foreign import ccall unsafe "_elm_cmp_vec" cElmCmpVec :: Word8 -> Ptr Word8 -> Word32
+foreign import ccall unsafe "_load_movemask" cLoadMovemask :: Ptr Word8 -> Word32
+foreign import ccall unsafe "ffs" cFfs :: Word32 -> Int
+foreign import ccall unsafe "_elm_add_movemask" cElmAddMovemask :: Word8 -> Ptr Word8 -> Word32
 
 showB :: Word32 -> String
 showB x = showIntAtBase 2 intToDigit x ""
-
-f = do
-  src <- mallocArray 32
-  pokeArray src [0..31]
-  let res = cElmCmpVec 5 src
-  putStrLn $ showB res
 
 -- todo: distibute STRef
 data Table s k v = Table
@@ -53,7 +52,7 @@ data Table s k v = Table
  , ctrl  :: STRef s (MutablePrimArray s Word8)
  , size  :: STRef s Int
  , used  :: STRef s Int
- }
+ } deriving (Generic, NFData)
 
 new :: PrimMonad m => m (Table (PrimState m) k v)
 new = newSized 8
@@ -100,24 +99,26 @@ lookup' hash' k m = do
   let idx = (s - 1) .&. h1'
   es <- liftPrim $ readSTRef $ elems m
   ct <- liftPrim $ readSTRef (ctrl m)
-
-  let f'' idx _ = do
-        let pc = PP.advancePtr (mutablePrimArrayContents ct) idx
-        let mask = cElmCmpVec h2' pc
-        -- recursive with bitmask
-        foldFirstBitmask (readBM es idx) mask >>= \case
-          Nothing
-            | cElmCmpVec 128 pc /= 0 -> pure (Just Nothing) -- found empty
-            | otherwise -> pure Nothing
-          x       -> pure (Just x)
-  iterateCtrlIdx f'' s idx
+  iterateCtrlIdx (lookCtrlAt ct h2' es) s idx
   where
-    readBM es idx bidx = do
+    lookBitmask es idx bidx = do
       let idx' = idx + bidx - 1
       (k', v) <- readArray es idx'
       pure $ if k == k'
              then Just v
              else Nothing
+    {-# INLINE lookBitmask #-}
+    lookCtrlAt ct h2' es idx _ = do
+        let pc = PP.advancePtr (mutablePrimArrayContents ct) idx
+        let mask = cElmCmpVec h2' pc
+        -- recursive with bitmask
+        foldFirstBitmask (lookBitmask es idx) mask >>= \case
+          Nothing
+            | cElmCmpVec 128 pc /= 0 -> pure (Just Nothing) -- found empty
+            | otherwise -> pure Nothing
+          x       -> pure (Just x)
+    {-# INLINE lookCtrlAt #-}
+{-# INLINE lookup' #-}
 
 iterateCtrlIdx :: Monad m => (Int -> Bool -> m (Maybe b)) -> Int -> Int -> m b
 iterateCtrlIdx f s idx = do
@@ -131,6 +132,7 @@ iterateCtrlIdx f s idx = do
         Nothing -> do
           if islast then assert (not sndt) (go 0 True) else go next sndt
         Just x -> pure x
+{-# INLINE iterateCtrlIdx #-}
 
 foldFirstBitmask :: Monad m => (Int -> m (Maybe a)) -> Word32 -> m (Maybe a)
 foldFirstBitmask  f mask = do
@@ -144,15 +146,18 @@ foldFirstBitmask  f mask = do
           case r of
             Nothing -> go bidxs
             x -> pure x
+{-# INLINE foldFirstBitmask #-}
 
-firstJust :: (a -> Maybe b) -> [a] -> Maybe b
-firstJust f = listToMaybe . mapMaybe f
+-- firstJust :: (a -> Maybe b) -> [a] -> Maybe b
+-- firstJust f = listToMaybe . mapMaybe f
 
 h1 :: Hashable k => (k -> Int) -> k -> Int
 h1 = ($)
+{-# INLINE h1 #-}
 
 h2 :: Hashable a => (a -> Int) -> a -> Word8
 h2 h x = fromIntegral $ h x .&. 127
+{-# INLINE h2 #-}
 
 delete :: (PrimMonad m, Hashable k, Eq k) => k -> Table (PrimState m) k v -> m ()
 delete = delete' hash
@@ -190,6 +195,7 @@ insert = insert' hash
 lookup :: (PrimMonad m, Hashable k, Show k, Eq k)
   => k -> Table (PrimState m) k v -> m (Maybe v)
 lookup = lookup' hash
+{-# INLINE lookup #-}
 
 checkOverflow ::
   (PrimMonad m, Hashable k) => Table (PrimState m) k v -> m Bool

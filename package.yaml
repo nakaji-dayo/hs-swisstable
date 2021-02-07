@@ -25,6 +25,7 @@ dependencies:
 - hashable
 - vector
 - primitive
+- deepseq
 
 library:
   source-dirs: src
@@ -58,3 +59,18 @@ tests:
     - tasty-discover
     - tasty
     - tasty-hunit
+
+executables:
+  swisstable-bench:
+    main:                Main.hs
+    source-dirs:         bench
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -optc -mavx2
+    - -O2
+    dependencies:
+    - swisstable
+    - criterion
+    - hashtables
