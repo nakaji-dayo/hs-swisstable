@@ -1,106 +1,111 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE BangPatterns    #-}
+{-# LANGUAGE DeriveAnyClass  #-}
+{-# LANGUAGE DeriveGeneric   #-}
+{-# LANGUAGE LambdaCase      #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE LambdaCase #-}
-module Lib where
+module Lib
+  ( Table (..)
+  , new
+  , newSized
+  , insert'
+  , insert
+  , lookup'
+  , lookup
+  , delete'
+  , delete
+  ) where
 
-import           Data.Word
-import           Foreign.C.Types
-import           Foreign.Marshal.Array
-import           Foreign.Ptr
-
-import           Data.Char                (intToDigit)
-import           Numeric                  (showHex, showIntAtBase)
-
+import           Control.DeepSeq         (NFData)
+import           Control.Exception       (assert)
 import           Control.Monad
+import           Control.Monad.Primitive (liftPrim)
+import           Control.Monad.ST        (ST)
 import           Data.Bits
 import           Data.Hashable
-
--- import qualified Data.Vector           as V
--- import           Data.Vector.Mutable   (MVector)
--- import qualified Data.Vector.Mutable   as V
-
--- import qualified Data.Vector           as V
--- import           Data.Vector.Mutable   (MVector)
--- import qualified Data.Vector.Mutable   as V
-import           Control.Exception        (assert)
-import           Control.Monad.Primitive  (PrimMonad (PrimState), RealWorld, liftPrim)
-import           Data.Maybe               (listToMaybe, mapMaybe)
 import           Data.Primitive
-import           Data.Primitive.Array     as A
-import           Data.Primitive.PrimArray
-import           Data.Primitive.Ptr       as PP
-import           Debug.Trace
-import GHC.Stack (HasCallStack)
-import Data.STRef
-
-import GHC.Generics (Generic)
-import Control.DeepSeq (NFData)
+import           Data.Primitive.Array    as A
+import           Data.Primitive.Ptr      as PP
+import           Data.STRef
+import           Data.Word
+import           Foreign.C.Types
+import           GHC.Generics            (Generic)
+import           Prelude                 hiding (lookup)
 
 -- todo: try foreign import prim
 foreign import ccall unsafe "_elm_cmp_vec" cElmCmpVec :: Word8 -> Ptr Word8 -> Word32
 foreign import ccall unsafe "_load_movemask" cLoadMovemask :: Ptr Word8 -> Word32
-foreign import ccall unsafe "ffs" cFfs :: Word32 -> Int
+foreign import ccall unsafe "ffs" cFfs :: Word32 -> CInt
 foreign import ccall unsafe "_elm_add_movemask" cElmAddMovemask :: Word8 -> Ptr Word8 -> Word32
 
-showB :: Word32 -> String
-showB x = showIntAtBase 2 intToDigit x ""
+newtype Table s k v = T (STRef s (Table_ s k v))
+  deriving (Generic, NFData)
 
 -- todo: distibute STRef
-data Table s k v = Table
- { elems :: STRef s (MutableArray s (k, v))
- , ctrl  :: STRef s (MutablePrimArray s Word8)
- , size  :: STRef s Int
- , used  :: STRef s Int
- } deriving (Generic, NFData)
+data Table_ s k v = Table
+ { elems ::  {-# UNPACK #-} !(MutableArray s (k, v))
+ , ctrl  ::  {-# UNPACK #-} !(MutablePrimArray s Word8)
+ , size  ::  {-# UNPACK #-} !Int
+ , mask  ::  {-# UNPACK #-} !Int
+ , used  ::  {-# UNPACK #-} !Int
+ } deriving (Generic)
 
-new :: PrimMonad m => m (Table (PrimState m) k v)
+new :: ST s (Table s k v)
 new = newSized 8
 
-newSized :: HasCallStack => PrimMonad m => Int -> m (Table (PrimState m) k v)
+newSized :: Int -> ST s (Table s k v)
 newSized n = do
   when (n .&. (n - 1) /= 0) $ error "size should be power of 2"
   es <- A.newArray n (error "impossible access")
   c <- newPinnedPrimArray (n + 32)
   setPrimArray c 0 n 128
   setPrimArray c n 32 254
-  ses <- liftPrim $ newSTRef es
-  sc <- liftPrim $ newSTRef c
-  su <- liftPrim $ newSTRef 0
-  ss <- liftPrim $ newSTRef (fromIntegral n)
-  pure $ Table ses sc ss su
+  let t = Table es c (fromIntegral n) (fromIntegral n - 1) 0
+  newRef t
 
-insert' :: (PrimMonad m, Hashable k) => (k -> Int) -> k -> v -> Table (PrimState m) k v -> m ()
-insert' hash' k v m = do
+newRef :: Table_ s k v -> ST s (Table s k v)
+newRef = fmap T . newSTRef
+{-# INLINE newRef #-}
+
+readRef :: Table s k v -> ST s (Table_ s k v)
+readRef (T ref) = readSTRef ref
+{-# INLINE readRef #-}
+
+writeRef :: Table s k v -> Table_ s k v -> ST s ()
+writeRef (T ref) = writeSTRef ref
+{-# INLINE writeRef #-}
+
+-- insert' :: (PrimMonad m, Hashable k) => (k -> Int) -> k -> v -> Table (PrimState m) k v -> m ()
+insert' :: (Hashable k) => (k -> Int) -> Table s k v -> k -> v -> ST s ()
+insert' hash' ref k v = do
+  m <- readRef ref
   let h1' = h1 hash' k
-  s <- liftPrim $ readSTRef  (size m)
-  findAndWrite ((s - 1) .&. h1') False
-  liftPrim $ modifySTRef (used m) (+1)
-  checkOverflow m >>= \x -> when x $ grow m
+  let s = size m
+  findAndWrite m ((s - 1) .&. h1') False
+  -- todo: cost?
+  let m' = m {used = used m + 1}
+  liftPrim $ writeRef ref m'
+  checkOverflow ref >>= \x -> when x $ grow ref
   where
-    findAndWrite idx sndt = do -- todo rm s
-      s <- liftPrim $ readSTRef  (size m)
-      es <- liftPrim $ readSTRef (elems m)
-      ct <- liftPrim $ readSTRef (ctrl m)
+    findAndWrite m idx sndt = do
+      let ct = ctrl m
       let pc = PP.advancePtr (mutablePrimArrayContents ct) idx
       let mask = cLoadMovemask pc
       let offset = cFfs mask - 1
-      let idx' = idx + offset
-      if offset < 0 || idx' >= s then assert (not sndt) $ findAndWrite 0 True else (do
-        writeArray es idx' (k, v)
-        writePrimArray ct idx' (h2 hash' k))
+      let idx' = idx + fromIntegral offset
+      if offset < 0 || idx' >= size m
+        then assert (not sndt) $ findAndWrite m 0 True
+        else (do
+                 writeArray (elems m) idx' (k, v)
+                 writePrimArray ct idx' (h2 hash' k))
 
-lookup' :: (PrimMonad m, Hashable k, Show k, Eq k)
-  => (k -> Int) -> k -> Table (PrimState m) k v -> m (Maybe v)
-lookup' hash' k m = do
-  s <- liftPrim $ readSTRef  (size m)
-  let h1' = h1 hash' k
-      h2' = h2 hash' k
-  let idx = (s - 1) .&. h1'
-  es <- liftPrim $ readSTRef $ elems m
-  ct <- liftPrim $ readSTRef (ctrl m)
-  iterateCtrlIdx (lookCtrlAt ct h2' es) s idx
+lookup' :: (Hashable k, Show k, Eq k) => (k -> Int) -> Table s k a -> k -> ST s (Maybe a)
+lookup' hash' ref k = do
+  Table{..} <- readRef ref
+  let !idx = mask .&. h1'
+  iterateCtrlIdx (lookCtrlAt ctrl elems) size idx
   where
+    !h1' = h1 hash' k
+    !h2' = h2 hash' k
     lookBitmask es idx bidx = do
       let idx' = idx + bidx - 1
       (k', v) <- readArray es idx'
@@ -108,7 +113,7 @@ lookup' hash' k m = do
              then Just v
              else Nothing
     {-# INLINE lookBitmask #-}
-    lookCtrlAt ct h2' es idx _ = do
+    lookCtrlAt ct es idx _ = do
         let pc = PP.advancePtr (mutablePrimArrayContents ct) idx
         let mask = cElmCmpVec h2' pc
         -- recursive with bitmask
@@ -121,15 +126,15 @@ lookup' hash' k m = do
 {-# INLINE lookup' #-}
 
 iterateCtrlIdx :: Monad m => (Int -> Bool -> m (Maybe b)) -> Int -> Int -> m b
-iterateCtrlIdx f s idx = do
-  go idx False
+iterateCtrlIdx f s offset =
+  go offset False
   where
     go idx sndt = do
       let next = idx + 32
           islast = next > s
       r <- f idx islast
       case r of
-        Nothing -> do
+        Nothing ->
           if islast then assert (not sndt) (go 0 True) else go next sndt
         Just x -> pure x
 {-# INLINE iterateCtrlIdx #-}
@@ -142,10 +147,11 @@ foldFirstBitmask  f mask = do
     go (bidx:bidxs)
       | bidx == 0 = pure Nothing
       | otherwise = do
-          r <- f bidx
+          r <- f (fromIntegral bidx)
           case r of
             Nothing -> go bidxs
-            x -> pure x
+            x       -> pure x
+    go _ = pure Nothing
 {-# INLINE foldFirstBitmask #-}
 
 -- firstJust :: (a -> Maybe b) -> [a] -> Maybe b
@@ -159,90 +165,88 @@ h2 :: Hashable a => (a -> Int) -> a -> Word8
 h2 h x = fromIntegral $ h x .&. 127
 {-# INLINE h2 #-}
 
-delete :: (PrimMonad m, Hashable k, Eq k) => k -> Table (PrimState m) k v -> m ()
+-- delete :: (PrimMonad m, Hashable k, Eq k) => k -> Table (PrimState m) k v -> m ()
+delete :: (Hashable k, Eq k) => Table s k v -> k -> ST s ()
 delete = delete' hash
 
-delete' :: (PrimMonad m, Hashable k, Eq k) => (k -> Int) -> k -> Table (PrimState m) k v -> m ()
-delete' hash' k m= do
-  s <- liftPrim $ readSTRef  (size m)
+-- delete' :: (PrimMonad m, Hashable k, Eq k) => (k -> Int) -> k -> Table (PrimState m) k v -> m ()
+delete' :: (Hashable k, Eq k) => (k -> Int) -> Table s k v -> k -> ST s ()
+delete' hash' ref k = do
+  m <- readRef ref
+  let s = size m
   let h1' = h1 hash' k
       h2' = h2 hash' k
   let idx = (s - 1) .&. h1'
-  es <- liftPrim $ readSTRef $ elems m
-  ct <- liftPrim $ readSTRef (ctrl m)
-  let f'' idx _ = do
-        let pc = PP.advancePtr (mutablePrimArrayContents ct) idx
+  let es = elems m
+  let ct = ctrl m
+  let f'' offset _ = do
+        let pc = PP.advancePtr (mutablePrimArrayContents ct) offset
         let mask = cElmCmpVec h2' pc
-        foldFirstBitmask (readBM es idx) mask >>= \case
+        foldFirstBitmask (readBM es offset) mask >>= \case
           Nothing
             | cElmCmpVec 128 pc /= 0 -> pure (Just Nothing)
             | otherwise -> pure Nothing
           x       -> pure (Just x)
   idx' <- iterateCtrlIdx f'' s idx
-  forM_ idx' $ \idx' -> writePrimArray ct idx' 254
+  forM_ idx' $ \x -> writePrimArray ct x 254
   where
-    readBM es idx bidx = do
-      let idx' = idx + bidx - 1
-      (k', v) <- readArray es idx'
+    readBM es offset bidx = do
+      let idx' = offset + bidx - 1
+      (k', _) <- readArray es idx'
       pure $ if k == k'
              then Just idx'
              else Nothing
 
 
-insert :: (PrimMonad m, Hashable k) => k -> v -> Table (PrimState m) k v -> m ()
+-- insert :: (PrimMonad m, Hashable k) => k -> v -> Table (PrimState m) k v -> m ()
+insert :: (Hashable k) => Table s k v -> k -> v -> ST s ()
 insert = insert' hash
 
-lookup :: (PrimMonad m, Hashable k, Show k, Eq k)
-  => k -> Table (PrimState m) k v -> m (Maybe v)
+-- lookup :: (PrimMonad m, Hashable k, Show k, Eq k)
+--   => k -> Table (PrimState m) k v -> m (Maybe v)
+lookup :: (Hashable k, Show k, Eq k) => Table s k a -> k -> ST s (Maybe a)
 lookup = lookup' hash
 {-# INLINE lookup #-}
 
 checkOverflow ::
-  (PrimMonad m, Hashable k) => Table (PrimState m) k v -> m Bool
-checkOverflow t@Table{..} = do
-  u <- liftPrim $ readSTRef used
-  s <- liftPrim $ readSTRef size
-  pure $ fromIntegral u / fromIntegral s > 0.8
+  (Hashable k) => Table s k v -> ST s Bool
+checkOverflow ref = do
+  t <- readRef ref
+  pure $ fromIntegral (used t) / fromIntegral (size t) > (0.8 :: Double)
 
-grow :: (PrimMonad m, Hashable k) => Table (PrimState m) k v -> m ()
-grow t = do
-  s <- liftPrim $ readSTRef  (size t)
-  let size' = s * 2
-  traceShowM ("grow", size')
+grow :: (Hashable k) => Table s k v -> ST s ()
+grow ref = do
+  t <- readRef ref
+  let size' = size t * 2
   t' <- newSized size'
-  mapM_' (f t') t
-  elems' <- liftPrim $ readSTRef (elems t')
-  liftPrim $ writeSTRef (elems t) elems'
-  ctrl' <- liftPrim $ readSTRef (ctrl t')
-  liftPrim $ writeSTRef (ctrl t) ctrl'
-  size' <- liftPrim $ readSTRef (size t')
-  liftPrim $ writeSTRef (size t) size'
+  mapM_' (f t') ref
+  writeRef ref =<< readRef t'
   pure ()
   where
-    f t (k, v) = insert k v t
+    f t (k, v) = insert t k v
 
-mapM_' :: (PrimMonad m, Hashable k) => ((k, v) -> m a)
-       -> Table (PrimState m) k v -> m ()
-mapM_' f t = do
+mapM_' :: ((k, v) -> ST s a) -> Table s k v -> ST s ()
+mapM_' f ref = do
+  t <- readRef ref
   let idx = 0
-  ct <- liftPrim $ readSTRef (ctrl t)
-  s <- liftPrim $ readSTRef (size t)
-  iterateCtrlIdx (h ct s) s idx
+  void $ iterateCtrlIdx (h t) (size t) idx
   pure ()
   where
-    g idx bidx = do
-      es <- liftPrim $ readSTRef (elems t)
+    g t idx bidx = do
       let idx' = idx + bidx - 1
-      e <- readArray es idx'
-      f e
+      e <- readArray (elems t) idx'
+      void $ f e
       pure Nothing
-    h ct s idx islast = do
-      let pc = PP.advancePtr (mutablePrimArrayContents ct) idx
+    h t idx islast = do
+      let pc = PP.advancePtr (mutablePrimArrayContents (ctrl t)) idx
       let mask = cElmAddMovemask 128 pc
-      r <- foldFirstBitmask (g idx) mask
+      r <- foldFirstBitmask (g t idx) mask
       if islast then pure (Just Nothing) else pure r
+
 {-
 試したい
 　右端で競合が発生した際に0に戻るのではなく、
 　予備領域を使い、予備領域が埋まったら拡張する。
 -}
+
+-- todo: make Data.HashTable.Class instance
