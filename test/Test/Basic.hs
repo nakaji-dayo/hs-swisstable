@@ -11,6 +11,7 @@ import           Test.Tasty.HUnit
 import           Control.Monad.ST         (stToIO)
 import           Data.Primitive.Array     as A
 import           Data.Primitive.PrimArray
+import           Test.QuickCheck          (Gen, generate, vector)
 
 
 unit_insertAndLookup :: IO ()
@@ -27,6 +28,19 @@ unit_insertAndLookup = do
   forM_ ks $ \k -> do
     h <- lookup ref k
     Just k @=? h
+
+unit_insertAndLookup_rand :: IO ()
+unit_insertAndLookup_rand = do
+  ks <- generate (vector 100 :: Gen [Int])
+  ref <- new
+  mapM_ (\k -> insert ref k k) ks
+  forM_ ks $ \k -> do
+    h <- lookup ref k
+    Just k @=? h
+
+-- unit_large_space :: IO ()
+-- unit_large_space =
+--   void $ newSized (2^32)
 
 unit_insert_conflict :: IO ()
 unit_insert_conflict = do

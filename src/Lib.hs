@@ -27,6 +27,7 @@ import           Data.Primitive.Array    as A
 import           Data.Primitive.Ptr      as PP
 import           Data.STRef
 import           Data.Word
+import           Debug.Trace
 import           Foreign.C.Types
 import           GHC.Generics            (Generic)
 import           Prelude                 hiding (lookup)
@@ -55,7 +56,7 @@ new = newSized 8
 newSized :: Int -> ST s (Table s k v)
 newSized n = do
   when (n .&. (n - 1) /= 0) $ error "size should be power of 2"
-  es <- A.newArray n (error "impossible access")
+  es <- A.newArray n (error "impossible")
   c <- newPinnedPrimArray (n + 32)
   setPrimArray c 0 n 128
   setPrimArray c n 32 254
@@ -78,48 +79,62 @@ writeRef (T ref) = writeSTRef ref
 insert' :: (Hashable k) => (k -> Int) -> Table s k v -> k -> v -> ST s ()
 insert' hash' ref k v = do
   m <- readRef ref
-  let h1' = h1 hash' k
   let s = size m
-  findAndWrite m ((s - 1) .&. h1') False
+  iterateCtrlIdx (f m) (size m) ((s - 1) .&. h1')
   -- todo: cost?
   let m' = m {used = used m + 1}
   liftPrim $ writeRef ref m'
   checkOverflow ref >>= \x -> when x $ grow ref
   where
-    findAndWrite m idx sndt = do
+    -- findAndWrite m idx sndt = do
+    --   let ct = ctrl m
+    --   let pc = PP.advancePtr (mutablePrimArrayContents ct) idx
+    --   let mask = cLoadMovemask pc
+    --   let offset = cFfs mask - 1
+    --   let idx' = idx + fromIntegral offset
+    --   traceShowM (idx, idx', offset)
+    --   if offset < 0 || idx' >= size m
+    --     then assert (not sndt) $ findAndWrite m 0 True
+    --     else (do
+    --              writeArray (elems m) idx' (k, v)
+    --              writePrimArray ct idx' (h2 hash' k))
+    !h1' = h1 hash' k
+    f m idx _ = do
       let ct = ctrl m
       let pc = PP.advancePtr (mutablePrimArrayContents ct) idx
       let mask = cLoadMovemask pc
       let offset = cFfs mask - 1
       let idx' = idx + fromIntegral offset
-      if offset < 0 || idx' >= size m
-        then assert (not sndt) $ findAndWrite m 0 True
+      if offset < 0 || idx' >= size m then pure Nothing
         else (do
                  writeArray (elems m) idx' (k, v)
-                 writePrimArray ct idx' (h2 hash' k))
+                 writePrimArray ct idx' (h2 h1')
+                 pure $ Just ()
+             )
+
 
 lookup' :: (Hashable k, Show k, Eq k) => (k -> Int) -> Table s k a -> k -> ST s (Maybe a)
-lookup' hash' ref k = do
+lookup' hash' ref !k = do
   Table{..} <- readRef ref
   let !idx = mask .&. h1'
-  iterateCtrlIdx (lookCtrlAt ctrl elems) size idx
+  iterateCtrlIdx (lookCtrlAt (mutablePrimArrayContents ctrl) elems) size idx
   where
     !h1' = h1 hash' k
-    !h2' = h2 hash' k
+    !h2' = h2 h1'
     lookBitmask es idx bidx = do
       let idx' = idx + bidx - 1
       (k', v) <- readArray es idx'
-      pure $ if k == k'
+      pure $ if k == k' -- todo: opt(hashも保持？)
              then Just v
              else Nothing
     {-# INLINE lookBitmask #-}
-    lookCtrlAt ct es idx _ = do
-        let pc = PP.advancePtr (mutablePrimArrayContents ct) idx
+    lookCtrlAt ptr es idx _ = do
+        let pc = PP.advancePtr ptr idx
         let mask = cElmCmpVec h2' pc
         -- recursive with bitmask
         foldFirstBitmask (lookBitmask es idx) mask >>= \case
           Nothing
-            | cElmCmpVec 128 pc /= 0 -> pure (Just Nothing) -- found empty
+            | cElmCmpVec 128 pc /= 0 -> pure (Just Nothing) -- found empty -- unlikely
             | otherwise -> pure Nothing
           x       -> pure (Just x)
     {-# INLINE lookCtrlAt #-}
@@ -129,7 +144,7 @@ iterateCtrlIdx :: Monad m => (Int -> Bool -> m (Maybe b)) -> Int -> Int -> m b
 iterateCtrlIdx f s offset =
   go offset False
   where
-    go idx sndt = do
+    go !idx !sndt = do
       let next = idx + 32
           islast = next > s
       r <- f idx islast
@@ -140,7 +155,7 @@ iterateCtrlIdx f s offset =
 {-# INLINE iterateCtrlIdx #-}
 
 foldFirstBitmask :: Monad m => (Int -> m (Maybe a)) -> Word32 -> m (Maybe a)
-foldFirstBitmask  f mask = do
+foldFirstBitmask  !f !mask = do
   let bitidxs = map cFfs $ iterate (\x -> x .&. (x - 1)) mask
   go bitidxs
   where
@@ -161,8 +176,8 @@ h1 :: Hashable k => (k -> Int) -> k -> Int
 h1 = ($)
 {-# INLINE h1 #-}
 
-h2 :: Hashable a => (a -> Int) -> a -> Word8
-h2 h x = fromIntegral $ h x .&. 127
+h2 :: Int -> Word8
+h2 x = fromIntegral $ x .&. 127
 {-# INLINE h2 #-}
 
 -- delete :: (PrimMonad m, Hashable k, Eq k) => k -> Table (PrimState m) k v -> m ()
@@ -175,7 +190,7 @@ delete' hash' ref k = do
   m <- readRef ref
   let s = size m
   let h1' = h1 hash' k
-      h2' = h2 hash' k
+      h2' = h2 h1'
   let idx = (s - 1) .&. h1'
   let es = elems m
   let ct = ctrl m
@@ -247,6 +262,7 @@ mapM_' f ref = do
 試したい
 　右端で競合が発生した際に0に戻るのではなく、
 　予備領域を使い、予備領域が埋まったら拡張する。
+  -> unlikelyすぎて効果うすそう
+-- make Data.HashTable.Class instance?
+  -> 両方に依存したインターフェス揃えるようlibrary作れば良い
 -}
-
--- todo: make Data.HashTable.Class instance
