@@ -31,10 +31,10 @@ unit_insertAndLookup = do
 
 unit_insertAndLookup_rand :: IO ()
 unit_insertAndLookup_rand = do
-  ks <- generate (vector 10000 :: Gen [Int])
+  ks <- generate (vector 100 :: Gen [Int])
   ref <- new
   mapM_ (\k -> insert ref k k) ks
-  -- stToIO $ H.analyze ref
+  stToIO $ H.analyze ref
   forM_ ks $ \k -> do
     h <- lookup ref k
     Just k @=? h
@@ -64,6 +64,16 @@ unit_insert_right_overflow = do
     Just k @=? h
  where
    h = const 7
+
+-- 一旦deleteでごまかす
+-- vのswapできるようにすべき
+unit_update :: IO ()
+unit_update = do
+  let ks = take 5 $ repeat "A"
+  t <- newSized 4
+  mapM_ (\x -> insert t x x) ks
+  s <- getSize t
+  4 @=? s
 
 unit_lookup_nothing_conflict :: IO ()
 unit_lookup_nothing_conflict = do
@@ -111,3 +121,11 @@ unit_delete = do
   h @=? Nothing
   h <- lookup t "C"
   h @=? Just "C"
+
+unit_foldM :: IO ()
+unit_foldM = do
+  let ks = ["A","B", "C"]
+  t <- new
+  mapM_ (\k -> insert t k k) ks
+  x <- stToIO $ H.foldM' (\acc (k, _) -> pure (acc ++ k)) "" t
+  "ABC" @=? x

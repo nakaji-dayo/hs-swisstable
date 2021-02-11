@@ -53,6 +53,7 @@ main =
         , benchSmallRand "BasicHashTable" (H.new :: IO (H.BasicHashTable Int Int)) H.insert H.lookup
         ]
       ]
+--todo: upsert実装になっていないのがバグ
 
       -- bgroup
       --   "insert(seq)"

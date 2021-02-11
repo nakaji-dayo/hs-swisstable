@@ -12,11 +12,11 @@ newSized :: (Int -> IO (Table RealWorld k v))
 newSized = stToIO . H.newSized
 {-# INLINE newSized #-}
 
-insert :: (Hashable k => Table RealWorld k v -> k -> v -> IO ())
+insert :: (Hashable k, Eq k) => Table RealWorld k v -> k -> v -> IO ()
 insert t k = stToIO . H.insert t k
 {-# INLINE insert #-}
 
-insert' :: (Hashable k => (k -> Int) -> Table RealWorld k v -> k -> v -> IO ())
+insert' :: (Hashable k, Eq k) => (k -> Int) -> Table RealWorld k v -> k -> v -> IO ()
 insert' h t k = stToIO . H.insert' h t k
 {-# INLINE insert' #-}
 
@@ -32,3 +32,7 @@ lookup' h t = stToIO . H.lookup' h t
 delete :: ((Hashable k, Show k, Eq k) => Table RealWorld k v -> k -> IO ())
 delete t = stToIO . H.delete t
 {-# INLINE delete #-}
+
+
+getSize :: Table RealWorld k v -> IO Int
+getSize  = stToIO . H.getSize
