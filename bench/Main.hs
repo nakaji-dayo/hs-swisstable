@@ -49,7 +49,7 @@ main =
       "lookup(rand)"
       [ bgroup
       "small"
-        [ benchSmallRand "SwissTable" new insert lookup
+        [ benchSmallRand "SwissTable" new insert lookup -- 衝突凄い。多分バグ
         , benchSmallRand "BasicHashTable" (H.new :: IO (H.BasicHashTable Int Int)) H.insert H.lookup
         ]
       ]

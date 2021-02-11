@@ -13,13 +13,15 @@ module Lib
   , lookup
   , delete'
   , delete
+  , analyze
   ) where
 
 import           Control.DeepSeq         (NFData)
 import           Control.Exception       (assert)
 import           Control.Monad
+import           Control.Monad.IO.Class  (liftIO)
 import           Control.Monad.Primitive (liftPrim)
-import           Control.Monad.ST        (ST)
+import           Control.Monad.ST        (RealWorld, ST)
 import           Data.Bits
 import           Data.Hashable
 import           Data.Primitive
@@ -30,6 +32,7 @@ import           Data.Word
 import           Debug.Trace
 import           Foreign.C.Types
 import           GHC.Generics            (Generic)
+import           GHC.IO                  (ioToST)
 import           Prelude                 hiding (lookup)
 
 -- todo: try foreign import prim
@@ -51,7 +54,7 @@ data Table_ s k v = Table
  } deriving (Generic)
 
 new :: ST s (Table s k v)
-new = newSized 8
+new = newSized 16
 
 newSized :: Int -> ST s (Table s k v)
 newSized n = do
@@ -99,7 +102,7 @@ insert' hash' ref k v = do
     --              writeArray (elems m) idx' (k, v)
     --              writePrimArray ct idx' (h2 hash' k))
     !h1' = h1 hash' k
-    f m idx _ = do
+    f m idx = do
       let ct = ctrl m
       let pc = PP.advancePtr (mutablePrimArrayContents ct) idx
       let mask = cLoadMovemask pc
@@ -123,16 +126,16 @@ lookup' hash' ref !k = do
     !h2' = h2 h1'
     lookBitmask es idx bidx = do
       let idx' = idx + bidx - 1
-      (k', v) <- readArray es idx'
+      (!k', v) <- readArray es idx'
       pure $ if k == k' -- todo: opt(hashも保持？)
              then Just v
              else Nothing
     {-# INLINE lookBitmask #-}
-    lookCtrlAt ptr es idx _ = do
+    lookCtrlAt ptr es idx = do
         let pc = PP.advancePtr ptr idx
         let mask = cElmCmpVec h2' pc
         -- recursive with bitmask
-        foldFirstBitmask (lookBitmask es idx) mask >>= \case
+        iterateBitmaskSet (lookBitmask es idx) mask >>= \case
           Nothing
             | cElmCmpVec 128 pc /= 0 -> pure (Just Nothing) -- found empty -- unlikely
             | otherwise -> pure Nothing
@@ -140,22 +143,21 @@ lookup' hash' ref !k = do
     {-# INLINE lookCtrlAt #-}
 {-# INLINE lookup' #-}
 
-iterateCtrlIdx :: Monad m => (Int -> Bool -> m (Maybe b)) -> Int -> Int -> m b
+iterateCtrlIdx :: Monad m => (Int -> m (Maybe b)) -> Int -> Int -> m b
 iterateCtrlIdx f s offset =
   go offset False
   where
     go !idx !sndt = do
-      let next = idx + 32
-          islast = next > s
-      r <- f idx islast
+      r <- f idx
       case r of
         Nothing ->
-          if islast then assert (not sndt) (go 0 True) else go next sndt
+          let next = idx + 32
+          in if next > s then assert (not sndt) (go 0 True) else go next sndt
         Just x -> pure x
 {-# INLINE iterateCtrlIdx #-}
 
-foldFirstBitmask :: Monad m => (Int -> m (Maybe a)) -> Word32 -> m (Maybe a)
-foldFirstBitmask  !f !mask = do
+iterateBitmaskSet :: Monad m => (Int -> m (Maybe a)) -> Word32 -> m (Maybe a)
+iterateBitmaskSet  !f !mask = do
   let bitidxs = map cFfs $ iterate (\x -> x .&. (x - 1)) mask
   go bitidxs
   where
@@ -167,7 +169,7 @@ foldFirstBitmask  !f !mask = do
             Nothing -> go bidxs
             x       -> pure x
     go _ = pure Nothing
-{-# INLINE foldFirstBitmask #-}
+{-# INLINE iterateBitmaskSet #-}
 
 -- firstJust :: (a -> Maybe b) -> [a] -> Maybe b
 -- firstJust f = listToMaybe . mapMaybe f
@@ -194,10 +196,10 @@ delete' hash' ref k = do
   let idx = (s - 1) .&. h1'
   let es = elems m
   let ct = ctrl m
-  let f'' offset _ = do
+  let f'' offset = do
         let pc = PP.advancePtr (mutablePrimArrayContents ct) offset
         let mask = cElmCmpVec h2' pc
-        foldFirstBitmask (readBM es offset) mask >>= \case
+        iterateBitmaskSet (readBM es offset) mask >>= \case
           Nothing
             | cElmCmpVec 128 pc /= 0 -> pure (Just Nothing)
             | otherwise -> pure Nothing
@@ -252,11 +254,35 @@ mapM_' f ref = do
       e <- readArray (elems t) idx'
       void $ f e
       pure Nothing
-    h t idx islast = do
+    h t idx = do
       let pc = PP.advancePtr (mutablePrimArrayContents (ctrl t)) idx
       let mask = cElmAddMovemask 128 pc
-      r <- foldFirstBitmask (g t idx) mask
-      if islast then pure (Just Nothing) else pure r
+      r <- iterateBitmaskSet (g t idx) mask
+      if idx + 32 > size t then pure (Just Nothing) else pure r
+
+-- analyze :: (Table RealWorld k v -> ST RealWorld ())
+-- analyze ref = do
+--   t <- readRef ref
+--   ioToST $ putStrLn $ "size: " <> show (size t)
+--   ioToST $ putStrLn $ "used: " <> show (used t)
+--   ioToST $ putStrLn $ "  " <> show (fromIntegral (used t) / fromIntegral (size t))
+--   where
+--     mapM_' :: ((k, v) -> ST s a) -> Table s k v -> ST s ()
+--     mapM_' t = do
+--       void $ iterateCtrlIdx (h t) (size t) 0
+--       where
+--         g t idx bidx = do
+--           let idx' = idx + bidx - 1
+--           (k, _) <- readArray (elems t) idx'
+--           let nidx = (size t - 1) .&. hash k
+--           pure $ idx' - nidx
+--           pure Nothing
+--         h t idx = do
+--           let pc = PP.advancePtr (mutablePrimArrayContents (ctrl t)) idx
+--           let mask = cElmAddMovemask 128 pc
+--           r <- iterateBitmaskSet (g t idx) mask
+--           if idx + 32 > size t then pure (Just Nothing) else pure r
+
 
 {-
 試したい

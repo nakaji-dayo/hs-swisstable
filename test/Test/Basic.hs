@@ -31,9 +31,10 @@ unit_insertAndLookup = do
 
 unit_insertAndLookup_rand :: IO ()
 unit_insertAndLookup_rand = do
-  ks <- generate (vector 100 :: Gen [Int])
+  ks <- generate (vector 10000 :: Gen [Int])
   ref <- new
   mapM_ (\k -> insert ref k k) ks
+  -- stToIO $ H.analyze ref
   forM_ ks $ \k -> do
     h <- lookup ref k
     Just k @=? h
