@@ -3,7 +3,8 @@ module Test.Basic where
 import           Prelude                  hiding (lookup)
 
 import           Control.Monad
-import           Data.HashTable.IO.Swiss
+import           Data.HashTable.IO.Swiss  hiding (foldM, mapM_)
+import qualified Data.HashTable.IO.Swiss  as S
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
@@ -115,7 +116,7 @@ unit_foldM = do
   let ks = ["A","B", "C"]
   t <- new
   mapM_ (\k -> insert t k k) ks
-  x <- stToIO $ foldM' (\acc (k, _) -> pure (acc ++ k)) "" t
+  x <- S.foldM (\acc (k, _) -> pure (acc ++ k)) "" t
   "ABC" @=? x
 
 unit_mutate :: IO ()
