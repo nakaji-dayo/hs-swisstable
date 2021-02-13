@@ -32,18 +32,10 @@ library:
   c-sources:
     - csrc/simd.c
   ghc-options:
-    - "-optc -mavx2"
-
-# executables:
-#   swisstable-exe:
-#     main:                Main.hs
-#     source-dirs:         app
-#     ghc-options:
-#     - -threaded
-#     - -rtsopts
-#     - -with-rtsopts=-N
-#     dependencies:
-#     - swisstable
+    - -O2
+    - -Wall
+  cc-options:
+    - -mavx2
 
 tests:
   swisstable-test:
@@ -52,8 +44,7 @@ tests:
     ghc-options:
     - -threaded
     - -rtsopts
-    # - -with-rtsopts=-N
-    - "-optc -mavx2"
+    - -with-rtsopts=-N
     dependencies:
     - swisstable
     - tasty-discover
@@ -66,10 +57,9 @@ executables:
     main:                Main.hs
     source-dirs:         bench
     ghc-options:
-    - -threaded
-    - -rtsopts
+    # - -threaded
+    # - -rtsopts
     # - -with-rtsopts=-N
-    - -optc -mavx2
     - -O2
     dependencies:
     - swisstable
