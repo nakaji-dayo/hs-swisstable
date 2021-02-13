@@ -4,7 +4,7 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-module Lib
+module Data.HashTable.ST.Swiss
   ( Table (..)
   , new
   , newSized
@@ -14,31 +14,31 @@ module Lib
   , lookup
   , delete'
   , delete
-  , foldM'
+  , foldM
+  , mapM_
   , analyze
   , getSize
+  , mutateST
+  , mutate
   ) where
 
 import           Control.DeepSeq         (NFData)
 import           Control.Exception       (assert)
-import           Control.Monad
-import           Control.Monad.IO.Class  (liftIO)
+import           Control.Monad           (forM_, void, when)
+import qualified Control.Monad           as M
 import           Control.Monad.Primitive (liftPrim)
 import           Control.Monad.ST        (RealWorld, ST)
 import           Data.Bits
 import           Data.Hashable
-import           Data.IORef
-import           Data.Maybe              (isJust)
 import           Data.Primitive
 import           Data.Primitive.Array    as A
 import           Data.Primitive.Ptr      as PP
 import           Data.STRef
 import           Data.Word
-import           Debug.Trace
 import           Foreign.C.Types
-import           GHC.Generics            (FixityI (PrefixI), Generic)
+import           GHC.Generics            (Generic)
 import           GHC.IO                  (ioToST)
-import           Prelude                 hiding (lookup)
+import           Prelude                 hiding (lookup, mapM_)
 
 -- todo: try foreign import prim
 foreign import ccall unsafe "_elm_cmp_vec" cElmCmpVec :: Word8 -> Ptr Word8 -> Word32
@@ -61,13 +61,19 @@ data Table_ s k v = Table
 new :: ST s (Table s k v)
 new = newSized 16
 
+empty :: Word8
+empty = 128
+
+deleted :: Word8
+deleted = 254
+
 newSized :: Int -> ST s (Table s k v)
 newSized n = do
   when (n .&. (n - 1) /= 0) $ error "size should be power of 2"
   es <- A.newArray n (error "impossible")
   c <- newPinnedPrimArray (n + 32)
-  setPrimArray c 0 n 128
-  setPrimArray c n 32 254
+  setPrimArray c 0 n empty
+  setPrimArray c n 32 deleted
   let t = Table es c (fromIntegral n) (fromIntegral n - 1) 0
   newRef t
 
@@ -122,7 +128,7 @@ insert' hash' ref k v = do
              )
 
 
-lookup' :: forall k s a. (Hashable k, Show k, Eq k) => (k -> Int) -> Table s k a -> k -> ST s (Maybe a)
+lookup' :: forall k s a. (Hashable k, Eq k) => (k -> Int) -> Table s k a -> k -> ST s (Maybe a)
 lookup' hash' ref !k = do
   Table{..} <- readRef ref
   let !idx = mask .&. h1'
@@ -146,9 +152,9 @@ lookup' hash' ref !k = do
              then Just v
              else Nothing
     {-# INLINE lookBitmask #-}
-    lookCtrlAt ptr es idx = do
+    lookCtrlAt !ptr !es !idx = do
         let pc = PP.advancePtr ptr idx
-        let mask = cElmCmpVec h2' pc
+        let !mask = cElmCmpVec h2' pc
         -- recursive with bitmask
         -- Just x <- firstJustM (lookBitmask' es idx) (listBitmaskSet mask)
         x <- iterateBitmaskSet (lookBitmask es idx) mask
@@ -156,24 +162,24 @@ lookup' hash' ref !k = do
           Nothing
             | cElmCmpVec 128 pc /= 0 -> pure (Just Nothing) -- found empty -- unlikely
             | otherwise -> pure Nothing
-          x       -> pure (Just x)
+          _       -> pure (Just x)
     {-# INLINE lookCtrlAt #-}
 {-# INLINE lookup' #-}
 
 iterateCtrlIdx :: Monad m => (Int -> m (Maybe b)) -> Int -> Int -> m b
-iterateCtrlIdx f s offset =
-  go offset False
+iterateCtrlIdx f !s !offset = go offset
   where
-    go !idx !sndt = do
-      r <- f idx
-      case r of
+    go !idx = do
+      f idx >>= \case
         Nothing ->
-          let next = idx + 32
-          in if next > s then assert (not sndt) (go 0 True) else go next sndt
+          let !next = idx + 32
+          in if next > s then go 0 else go next
         Just x -> pure x
 {-# INLINE iterateCtrlIdx #-}
 
+listBitmaskSet :: Word32 -> [CInt]
 listBitmaskSet = map cFfs . iterate (\x -> x .&. (x - 1))
+{-# INLINE listBitmaskSet #-}
 
 iterateBitmaskSet :: Monad m => (Int -> m (Maybe a)) -> Word32 -> m (Maybe a)
 iterateBitmaskSet  !f !mask = do
@@ -181,13 +187,13 @@ iterateBitmaskSet  !f !mask = do
   go bitidxs
   where
     go (bidx:bidxs)
-      | bidx == 0 = pure Nothing
-      | otherwise = do
-          r <- f (fromIntegral bidx)
-          case r of
+      | bidx /= 0 = do
+          f (fromIntegral bidx) >>= \case
             Nothing -> go bidxs
             x       -> pure x
+      | otherwise = pure Nothing
     go _ = pure Nothing
+    {-# INLINE go #-}
 {-# INLINE iterateBitmaskSet #-}
 
 {- I want to use the infinite list, but I can't speed it up. -}
@@ -251,7 +257,7 @@ insert = insert' hash
 
 -- lookup :: (PrimMonad m, Hashable k, Show k, Eq k)
 --   => k -> Table (PrimState m) k v -> m (Maybe v)
-lookup :: (Hashable k, Show k, Eq k) => Table s k a -> k -> ST s (Maybe a)
+lookup :: (Hashable k, Eq k) => Table s k a -> k -> ST s (Maybe a)
 lookup = lookup' hash
 {-# INLINE lookup #-}
 
@@ -268,18 +274,17 @@ grow ref = do
   t <- readRef ref
   let size' = size t * 2
   t' <- newSized size'
-  mapM_' (f t') ref
+  mapM_ (f t') ref
   writeRef ref =<< readRef t'
   pure ()
   where
     f t (k, v) = insert t k v
 
-mapM_' :: ((k, v) -> ST s a) -> Table s k v -> ST s ()
-mapM_' f ref = do
+mapM_ :: ((k, v) -> ST s a) -> Table s k v -> ST s ()
+mapM_ f ref = do
   t <- readRef ref
   let idx = 0
   void $ iterateCtrlIdx (h t) (size t) idx
-  pure ()
   where
     g t idx bidx = do
       let idx' = idx + bidx - 1
@@ -292,11 +297,10 @@ mapM_' f ref = do
       r <- iterateBitmaskSet (g t idx) mask
       if idx + 32 > size t then pure (Just Nothing) else pure r
 
-foldM' :: (a -> (k,v) -> ST s a) -> a -> Table s k v -> ST s a
-foldM' f seed0 ref = do
+foldM :: (a -> (k,v) -> ST s a) -> a -> Table s k v -> ST s a
+foldM f seed0 ref = do
   t <- readRef ref
-  let idx = 0
-  h seed0 t idx
+  foldCtrlM g seed0 t 0
   where
     g acc t idx (bidx:xs)
       | bidx == 0 = pure acc
@@ -305,16 +309,19 @@ foldM' f seed0 ref = do
           e <- readArray (elems t) idx'
           acc' <- f acc e
           g acc' t idx xs
-    h acc t idx = do
-      let pc = PP.advancePtr (mutablePrimArrayContents (ctrl t)) idx
-      let mask = cElmAddMovemask 128 pc
-      acc' <- g acc t idx (map fromIntegral $ listBitmaskSet mask)
-      if idx + 32 > size t then pure acc' else h acc' t (idx + 32)
+    g _ _ _ _ = error "impossible"
 
-_foldM' f seed0 ref = do
+foldCtrlM :: (a -> Table_ s k v -> Int -> [Int] -> ST s a) -> a -> Table_ s k v -> Int -> ST s a
+foldCtrlM g acc t idx = do
+  let pc = PP.advancePtr (mutablePrimArrayContents (ctrl t)) idx
+  let mask = cElmAddMovemask 128 pc
+  acc' <- g acc t idx (map fromIntegral $ listBitmaskSet mask)
+  if idx + 32 > size t then pure acc' else foldCtrlM g acc' t (idx + 32)
+
+_foldM :: (a -> (k,v) -> Int -> ST s a) -> a -> Table s k v -> ST s a
+_foldM f seed0 ref = do
   t <- readRef ref
-  let idx = 0
-  h seed0 t idx
+  foldCtrlM g seed0 t 0
   where
     g acc t idx (bidx:xs)
       | bidx == 0 = pure acc
@@ -323,50 +330,41 @@ _foldM' f seed0 ref = do
           e <- readArray (elems t) idx'
           acc' <- f acc e idx'
           g acc' t idx xs
-    h acc t idx = do
-      let pc = PP.advancePtr (mutablePrimArrayContents (ctrl t)) idx
-      let mask = cElmAddMovemask 128 pc
-      acc' <- g acc t idx (map fromIntegral $ listBitmaskSet mask)
-      if idx + 32 > size t then pure acc' else h acc' t (idx + 32)
-
+    g _ _ _ _ = error "impossible"
 
 analyze :: (Hashable k, Show k) => (Table RealWorld k v -> ST RealWorld ())
 analyze ref = do
   t <- readRef ref
-  cs <- _foldM' (f t) [] ref
+  cs <- _foldM (f t) [] ref
   ioToST $ do
     putStrLn $ "size: " <> show (size t)
     putStrLn $ "used: " <> show (used t)
-    putStrLn $ "  " <> show (fromIntegral (used t) / fromIntegral (size t))
-    print $ "max diff: " <> (show $ maximum $ fmap snd cs)
-    print $ "sum diff: " <> (show $ sum $ fmap snd cs)
-    mapM_ print cs
+    putStrLn $ "  " <> show (fromIntegral (used t) / fromIntegral (size t) :: Double)
+    print $ "max diff: " <> show (maximum (fmap snd cs))
+    print $ "sum diff: " <> show (sum (fmap snd cs))
+    M.mapM_ print cs
   where
     f t acc (k, _) idx = do
       let nidx = (size t - 1) .&. hash k
       let d = if idx - nidx < 0 then idx - nidx + size t else idx - nidx
       pure $ ((k, nidx, idx), d):acc
 
---   where
---     mapM_' :: ((k, v) -> ST s a) -> Table s k v -> ST s ()
---     mapM_' t = do
---       res <- ioToST newIORef
---       void $ iterateCtrlIdx (h t) (size t) 0
---       where
---         g acc t idx (bidx:xs) =
---           | bidx == 0 = acc
---           | otherwise = do
---               let idx' = idx + bidx - 1
---               (k, _) <- readArray (elems t) idx'
---               let nidx = (size t - 1) .&. hash k
---               pure $ idx' - nidx
---               pure Nothing
---         h t idx = do
---           let pc = PP.advancePtr (mutablePrimArrayContents (ctrl t)) idx
---           let mask = cElmAddMovemask 128 pc
---           r <- iterateBitmaskSet (g t idx) mask
---           if idx + 32 > size t then pure (Just Nothing) else pure r
+mutateST :: (Eq k, Hashable k)
+         => Table s k v -> k -> (Maybe v -> ST s (Maybe v, a)) -> ST s a
+mutateST ref k f = do
+  v <- lookup ref k
+  -- todo: opt: lookup single time
+  f v >>= \case
+    (Just v', a) -> do
+      insert ref k v'
+      pure a
+    (Nothing, a) -> do
+      delete ref k
+      pure a
 
+mutate :: (Eq k, Hashable k) =>
+  Table s k v -> k -> (Maybe v -> (Maybe v, a)) -> ST s a
+mutate ref !k !f = mutateST ref k (pure . f)
 
 {-
 試したい

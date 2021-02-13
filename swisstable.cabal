@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c7ad4770519753bb084f6d5f8b168d16a1007d955ee723cd18a4bd2c3892857f
+-- hash: b96c9a3aa01b96b407394fbe5c455ddaf1411574a4adea9feb4526a6fb9806dd
 
 name:           swisstable
 version:        0.1.0.0
@@ -27,8 +27,8 @@ source-repository head
 
 library
   exposed-modules:
-      IO
-      Lib
+      Data.HashTable.IO.Swiss
+      Data.HashTable.ST.Swiss
   other-modules:
       Paths_swisstable
   hs-source-dirs:

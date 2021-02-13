@@ -3,8 +3,7 @@ module Test.Basic where
 import           Prelude                  hiding (lookup)
 
 import           Control.Monad
-import           IO
-import qualified Lib                      as H
+import           Data.HashTable.IO.Swiss
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
@@ -19,29 +18,18 @@ unit_insertAndLookup = do
   let ks = ["A", "Z", "C", "Y", "E", "X", "G", "W"]
   ref <- new
   mapM_ (\k -> insert ref k k) ks
-  -- t <- stToIO $ H.readRef ref
-  -- ia <- freezeArray  (H.elems t) 0 (sizeofMutableArray $ H.elems t)
-  -- print ("test1", ia)
-  -- ictrl <- freezePrimArray (H.ctrl t) 0 (H.size t)
-  -- print ictrl
-  -- print  "-----------"
   forM_ ks $ \k -> do
     h <- lookup ref k
     Just k @=? h
 
 unit_insertAndLookup_rand :: IO ()
 unit_insertAndLookup_rand = do
-  ks <- generate (vector 100 :: Gen [Int])
+  ks <- generate (vector 1000 :: Gen [Int])
   ref <- new
   mapM_ (\k -> insert ref k k) ks
-  stToIO $ H.analyze ref
   forM_ ks $ \k -> do
     h <- lookup ref k
     Just k @=? h
-
--- unit_large_space :: IO ()
--- unit_large_space =
---   void $ newSized (2^32)
 
 unit_insert_conflict :: IO ()
 unit_insert_conflict = do
@@ -127,5 +115,17 @@ unit_foldM = do
   let ks = ["A","B", "C"]
   t <- new
   mapM_ (\k -> insert t k k) ks
-  x <- stToIO $ H.foldM' (\acc (k, _) -> pure (acc ++ k)) "" t
+  x <- stToIO $ foldM' (\acc (k, _) -> pure (acc ++ k)) "" t
   "ABC" @=? x
+
+unit_mutate :: IO ()
+unit_mutate = do
+  let ks = ["A","B", "C"]
+  t <- new
+  mapM_ (\k -> insert t k k) ks
+  mutate t "A" (\(Just v) -> (Just (v ++ "!"), ()))
+  mutate t "B" (const (Nothing, ()))
+  a <- lookup t "A"
+  Just "A!" @=? a
+  a <- lookup t "B"
+  Nothing @=? a

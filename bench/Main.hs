@@ -6,13 +6,14 @@ import           Control.Monad
 import           Criterion
 import           Criterion.Main
 import qualified Data.HashTable.IO       as H
+import           Data.HashTable.IO.Swiss hiding (fildM, mapM_)
 import qualified Data.HashTable.ST.Basic
 import           Data.Maybe
-import           IO
 import           Prelude                 hiding (lookup)
 import           Test.QuickCheck         (Gen, generate, vector)
 
-smallKeys = [1..10000::Int]
+smallKeys :: [Int]
+smallKeys = [1..10000]
 
 initSmall new insert = do
   t <- new
@@ -25,15 +26,19 @@ benchSmall name new insert lookup =
   mapM_ (lookup t) smallKeys
 
 
-initSmallRand new insert = do
+genSmallRand = generate (vector 10000 :: Gen [Int])
+
+initSmallRand new insert ks = do
   t <- new
-  ks <- generate (vector 10000 :: Gen [Int])
   mapM_ (\x -> insert t x x) ks
   pure (ks, t)
 
-benchSmallRand name new insert lookup =
-  env (initSmallRand new insert) $ \ ~(ks, t) -> bench name $ whnfIO $ do
+benchSmallRand name new insert lookup ks =
+  env (initSmallRand new insert ks) $ \ ~(ks, t) -> bench name $ whnfIO $ do
   mapM_ (lookup t) ks
+
+insertSmallSeq name new insert =
+  bench name $ whnfIO $ initSmall new insert
 
 main =
   defaultMain
@@ -47,28 +52,22 @@ main =
         ]
     , bgroup
       "lookup(rand)"
-      [ bgroup
+      [ env genSmallRand $ \k -> bgroup
       "small"
-        [ benchSmallRand "SwissTable" new insert lookup -- 衝突凄い。多分バグ
-        , benchSmallRand "BasicHashTable" (H.new :: IO (H.BasicHashTable Int Int)) H.insert H.lookup
+        [ benchSmallRand "SwissTable" new insert lookup k
+        , benchSmallRand "BasicHashTable" (H.new :: IO (H.BasicHashTable Int Int)) H.insert H.lookup k
         ]
       ]
---todo: upsert実装になっていないのがバグ
-
-      -- bgroup
-      --   "insert(seq)"
-      --   [ bgroup
-      --       "small"
-      --       [ bench "swiss" $
-      --           whnfIO $ do
-      --             t <- newSized (2 ^ 16)
-      --             mapM_ (\x -> insert x x t) smallKeys
-      --       , bench "HashTable.IO" $
-      --           whnfIO $ do
-      --             t <- H.new :: IO (H.BasicHashTable Int Int)
-      --             mapM_ (\x -> H.insert t x x) smallKeys
-      --       ]
-      --   ]
+    , bgroup
+        "insert(seq)"
+        [ bgroup "sized"
+          [ bgroup
+            "small"
+            [ insertSmallSeq "SwissTable" (newSized (2^16)) insert
+            , insertSmallSeq "BasicHashTable" (H.newSized (2^16) :: IO (H.BasicHashTable Int Int)) H.insert
+            ]
+          ]
+        ]
     ]
 
 instance NFData (Data.HashTable.ST.Basic.HashTable s k v) where

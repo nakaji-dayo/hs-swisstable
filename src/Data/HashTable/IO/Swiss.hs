@@ -1,7 +1,7 @@
-module IO where
+module Data.HashTable.IO.Swiss where
 
 import           Control.Monad.ST
-import           Lib              as H
+import           Data.HashTable.ST.Swiss              as H
 import Data.Hashable (Hashable)
 
 new :: IO (Table RealWorld k v)
@@ -36,3 +36,20 @@ delete t = stToIO . H.delete t
 
 getSize :: Table RealWorld k v -> IO Int
 getSize  = stToIO . H.getSize
+{-# INLINE getSize #-}
+
+mutateST :: (Eq k, Hashable k)
+         => Table RealWorld k v -> k -> (Maybe v -> ST RealWorld (Maybe v, a)) -> IO a
+mutateST t k = stToIO . H.mutateST t k
+{-# INLINE mutateST #-}
+
+mutate :: (Eq k, Hashable k)
+         => Table RealWorld k v -> k -> (Maybe v -> (Maybe v, a)) -> IO a
+mutate t k = stToIO . H.mutate t k
+{-# INLINE mutate #-}
+
+mapM_ :: ((k, v) -> ST RealWorld a) -> Table RealWorld k v -> IO ()
+mapM_ f = stToIO . H.mapM_ f
+
+foldM :: (a -> (k,v) -> ST RealWorld a) -> a -> Table RealWorld k v -> IO a
+foldM f i = stToIO . H.foldM f i
