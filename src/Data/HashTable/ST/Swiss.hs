@@ -126,6 +126,7 @@ insert' hash' ref k v = do
                  writePrimArray ct idx' (h2 h1')
                  pure $ Just ()
              )
+{-# INLINE insert' #-}
 
 
 lookup' :: forall k s a. (Hashable k, Eq k) => (k -> Int) -> Table s k a -> k -> ST s (Maybe a)
@@ -196,16 +197,15 @@ iterateBitmaskSet  !f !mask = do
     {-# INLINE go #-}
 {-# INLINE iterateBitmaskSet #-}
 
-{- I want to use the infinite list, but I can't speed it up. -}
--- listBitmaskSet :: Word32 -> [Int]
--- listBitmaskSet !mask = map (fromIntegral . cFfs) $ iterate (\x -> x .&. (x - 1)) mask
--- {-# INLINE listBitmaskSet #-}
+listBitmaskSet :: Word32 -> [Int]
+listBitmaskSet !mask = map (fromIntegral . cFfs) $ iterate (\x -> x .&. (x - 1)) mask
+{-# INLINE listBitmaskSet #-}
 
--- firstJustM f (x:xs) = f x >>= \case
---   Just r -> pure $ Just r
---   Nothing -> firstJustM f xs
--- firstJustM f _ = pure Nothing
--- {-# INLINE firstJustM #-}
+firstJustM f (x:xs) = f x >>= \case
+  Just r -> pure $ Just r
+  Nothing -> firstJustM f xs
+firstJustM f _ = pure Nothing
+{-# INLINE firstJustM #-}
 
 h1 :: Hashable k => (k -> Int) -> k -> Int
 h1 = ($)
@@ -254,6 +254,7 @@ delete' hash' ref k = do
 -- insert :: (PrimMonad m, Hashable k) => k -> v -> Table (PrimState m) k v -> m ()
 insert :: (Hashable k, Eq k) => Table s k v -> k -> v -> ST s ()
 insert = insert' hash
+{-# INLINE insert #-}
 
 -- lookup :: (PrimMonad m, Hashable k, Show k, Eq k)
 --   => k -> Table (PrimState m) k v -> m (Maybe v)
@@ -266,8 +267,10 @@ checkOverflow ::
 checkOverflow ref = do
   t <- readRef ref
   pure $ fromIntegral (used t) / fromIntegral (size t) > maxLoad
+{-# INLINE checkOverflow #-}
 
-maxLoad = 0.8 :: Double
+maxLoad :: Double
+maxLoad = 0.8
 
 grow :: (Hashable k, Eq k) => Table s k v -> ST s ()
 grow ref = do
