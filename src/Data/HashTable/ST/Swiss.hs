@@ -22,7 +22,6 @@ module Data.HashTable.ST.Swiss
   , mutate
   ) where
 
-import           Control.DeepSeq      (NFData)
 import           Control.Monad        (forM_, void, when)
 import qualified Control.Monad        as M
 import           Control.Monad.ST     (RealWorld, ST)
@@ -45,7 +44,7 @@ foreign import ccall unsafe "ffs" cFfs :: Word32 -> CInt
 foreign import ccall unsafe "_elm_add_movemask" cElmAddMovemask :: Word8 -> Ptr Word8 -> Word32
 
 newtype Table s k v = T (STRef s (Table_ s k v))
-  deriving (Generic, NFData)
+  deriving (Generic)
 
 -- todo: distibute STRef
 data Table_ s k v = Table

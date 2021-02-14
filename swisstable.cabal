@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 1c0a564715a5d207b9c8586de10e35a7e372933eb7c58222e3d281d67f4ca248
+-- hash: 2f9c118c109be85a1779a0713e0192b5bb52fcc83774f4555b155cc5e188a863
 
 name:           swisstable
 version:        0.1.0.1
@@ -42,11 +42,9 @@ library
       csrc/simd.c
   build-depends:
       base >=4.7 && <5
-    , deepseq
     , hashable
     , primitive
     , vector
-    , wide-word
   default-language: Haskell2010
 
 executable swisstable-bench
@@ -66,7 +64,6 @@ executable swisstable-bench
     , primitive
     , swisstable
     , vector
-    , wide-word
   default-language: Haskell2010
 
 test-suite swisstable-test
@@ -81,7 +78,6 @@ test-suite swisstable-test
   build-depends:
       QuickCheck
     , base >=4.7 && <5
-    , deepseq
     , hashable
     , primitive
     , swisstable
@@ -89,5 +85,4 @@ test-suite swisstable-test
     , tasty-discover
     , tasty-hunit
     , vector
-    , wide-word
   default-language: Haskell2010

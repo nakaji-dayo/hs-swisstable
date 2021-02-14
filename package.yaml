@@ -22,11 +22,9 @@ description:         Please see the README on GitHub at <https://github.com/naka
 
 dependencies:
 - base >= 4.7 && < 5
-- wide-word
 - hashable
 - vector
 - primitive
-- deepseq
 
 library:
   source-dirs: src
@@ -69,3 +67,4 @@ executables:
     - criterion
     - hashtables
     - QuickCheck
+    - deepseq

@@ -2,7 +2,7 @@ name: Hackage release
 
 on:
   push:
-    branches: [ test-release ]
+    tags: [ '*' ]
 
 jobs:
   release:

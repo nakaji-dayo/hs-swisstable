@@ -2,12 +2,14 @@
 module Main where
 
 import           Control.DeepSeq
+import           Control.DeepSeq         (NFData)
 import           Control.Monad
 import           Criterion
 import           Criterion.Main
 import qualified Data.HashTable.IO       as H
 import           Data.HashTable.IO.Swiss hiding (fildM, mapM_)
 import qualified Data.HashTable.ST.Basic
+import qualified Data.HashTable.ST.Swiss as S
 import           Data.Maybe
 import           Prelude                 hiding (lookup)
 import           Test.QuickCheck         (Gen, generate, vector)
@@ -72,3 +74,4 @@ main =
 
 instance NFData (Data.HashTable.ST.Basic.HashTable s k v) where
   rnf x = seq x ()
+instance NFData (S.Table s k v)
