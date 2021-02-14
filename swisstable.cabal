@@ -4,11 +4,13 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 47c317a974bfdd733580e75de676584b623474571defd6ba8ef2e2b3156b2a86
+-- hash: e3a83908fdcee3baf598ac14f1a2bda9fa2c678cd9e3485ab51d7ab085d59052
 
 name:           swisstable
 version:        0.1.0.1
+synopsis:       Google's SwissTable hash map
 description:    Please see the README on GitHub at <https://github.com/nakaji-dayo/swisstable#readme>
+category:       Data
 homepage:       https://github.com/nakaji-dayo/swisstable#readme
 bug-reports:    https://github.com/nakaji-dayo/swisstable/issues
 author:         Daishi Nakajima
