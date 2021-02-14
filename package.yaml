@@ -12,7 +12,7 @@ extra-source-files:
 - csrc/simd.c
 
 # Metadata used when publishing your package
-synopsis:            Google's SwissTable hash map
+synopsis:            SwissTable hash map
 category:            Data
 
 # To avoid duplicated efforts in documentation and dealing with the
