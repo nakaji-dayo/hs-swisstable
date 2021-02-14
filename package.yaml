@@ -1,5 +1,5 @@
 name:                swisstable
-version:             0.1.0.0
+version:             0.1.0.1
 github:              "githubuser/swisstable"
 license:             BSD3
 author:              "Author name here"
@@ -51,6 +51,8 @@ tests:
     - tasty
     - tasty-hunit
     - QuickCheck
+    build-tool-depends:
+    - hspec-discover:hspec-discover
 
 executables:
   swisstable-bench:

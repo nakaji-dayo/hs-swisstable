@@ -4,10 +4,10 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5b2da58aa380f354fd79715421ab4be9ea96884fdccaaabe602b1b728ab876a0
+-- hash: 9f1bc112806fef0cc34cc573dd7d8704b30025ed4ad018835854e35e569200ac
 
 name:           swisstable
-version:        0.1.0.0
+version:        0.1.0.1
 description:    Please see the README on GitHub at <https://github.com/githubuser/swisstable#readme>
 homepage:       https://github.com/githubuser/swisstable#readme
 bug-reports:    https://github.com/githubuser/swisstable/issues
