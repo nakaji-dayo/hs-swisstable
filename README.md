@@ -1,31 +1,48 @@
 # swisstable
 
-stack build --ghc-options="-optc -mavx2" && stack ghci
+:warning: Currently, This library works on processors that support `AVX2` .
 
-b42586f
+## links
+
+- [Hackage](https://hackage.haskell.org/package/swisstable-0.1.0.1)
+
+## Benchmark snapshot
+
+15564c4
 ```
 benchmarking lookup(seq)/small/SwissTable
-time                 182.3 μs   (181.9 μs .. 182.8 μs)
-                     1.000 R²   (1.000 R² .. 1.000 R²)
-mean                 181.6 μs   (181.4 μs .. 181.8 μs)
-std dev              691.7 ns   (477.3 ns .. 1.163 μs)
+time                 218.0 μs   (217.3 μs .. 218.6 μs)
+                     1.000 R²   (0.999 R² .. 1.000 R²)
+mean                 218.5 μs   (218.2 μs .. 218.8 μs)
+std dev              1.074 μs   (903.7 ns .. 1.357 μs)
 
 benchmarking lookup(seq)/small/BasicHashTable
-time                 208.9 μs   (208.2 μs .. 209.7 μs)
-                     1.000 R²   (0.999 R² .. 1.000 R²)
-mean                 210.0 μs   (209.3 μs .. 212.2 μs)
-std dev              3.939 μs   (1.139 μs .. 8.130 μs)
-variance introduced by outliers: 12% (moderately inflated)
+time                 277.8 μs   (277.5 μs .. 278.1 μs)
+                     1.000 R²   (1.000 R² .. 1.000 R²)
+mean                 277.6 μs   (277.0 μs .. 277.9 μs)
+std dev              1.479 μs   (906.2 ns .. 2.655 μs)
 
 benchmarking lookup(rand)/small/SwissTable
-time                 519.5 μs   (518.5 μs .. 521.1 μs)
+time                 386.7 μs   (384.2 μs .. 390.1 μs)
                      1.000 R²   (1.000 R² .. 1.000 R²)
-mean                 520.9 μs   (520.2 μs .. 521.6 μs)
-std dev              2.290 μs   (1.937 μs .. 2.778 μs)
+mean                 394.0 μs   (392.4 μs .. 395.4 μs)
+std dev              5.017 μs   (4.124 μs .. 6.518 μs)
 
 benchmarking lookup(rand)/small/BasicHashTable
-time                 232.8 μs   (232.2 μs .. 233.5 μs)
+time                 484.9 μs   (483.8 μs .. 485.8 μs)
                      1.000 R²   (1.000 R² .. 1.000 R²)
-mean                 232.9 μs   (232.5 μs .. 233.4 μs)
-std dev              1.519 μs   (1.019 μs .. 2.363 μs)
+mean                 484.7 μs   (484.2 μs .. 485.2 μs)
+std dev              1.557 μs   (1.294 μs .. 1.956 μs)
+
+benchmarking insert(seq)/sized/small/SwissTable
+time                 1.271 ms   (1.265 ms .. 1.278 ms)
+                     1.000 R²   (1.000 R² .. 1.000 R²)
+mean                 1.245 ms   (1.238 ms .. 1.252 ms)
+std dev              24.58 μs   (20.19 μs .. 29.61 μs)
+
+benchmarking insert(seq)/sized/small/BasicHashTable
+time                 1.315 ms   (1.311 ms .. 1.319 ms)
+                     1.000 R²   (1.000 R² .. 1.000 R²)
+mean                 1.321 ms   (1.319 ms .. 1.322 ms)
+std dev              5.360 μs   (4.111 μs .. 6.704 μs)
 ```
