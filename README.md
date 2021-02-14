@@ -2,6 +2,12 @@
 
 :warning: Currently, This library works on processors that support `AVX2` .
 
+## links
+
+- [Hackage](https://hackage.haskell.org/package/swisstable-0.1.0.1)
+
+## Benchmark snapshot
+
 15564c4
 ```
 benchmarking lookup(seq)/small/SwissTable
