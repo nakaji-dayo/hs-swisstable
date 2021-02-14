@@ -13,17 +13,6 @@ jobs:
       with:
         ghc-version: '8.10.3'
         cabal-version: '3.2'
-    - name: Cache
-      uses: actions/cache@v1
-      env:
-        cache-name: cache-cabal
-      with:
-        path: ~/.cabal
-        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
-        restore-keys: |
-          ${{ runner.os }}-build-${{ env.cache-name }}-
-          ${{ runner.os }}-build-
-          ${{ runner.os }}-
     - name: sdist
       run: cabal sdist
     - name: upload
@@ -31,5 +20,4 @@ jobs:
         HACKAGE_USERNAME: ${{ secrets.HACKAGE_USERNAME }}
         HACKAGE_PASSWORD: ${{ secrets.HACKAGE_PASSWORD }}
       run: |
-        echo ${HACKAGE_USERNAME}
         cabal upload --username=${HACKAGE_USERNAME} --password=${HACKAGE_PASSWORD} dist-newstyle/sdist/*

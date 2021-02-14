@@ -1,6 +1,6 @@
 name:                swisstable
 version:             0.1.0.1
-github:              "nakaji-dayo/swisstable"
+github:              "nakaji-dayo/hs-swisstable"
 license:             BSD3
 author:              "Daishi Nakajima"
 maintainer:          "nakaji.dayo@gmail.com"
@@ -18,7 +18,7 @@ category:            Data
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/nakaji-dayo/swisstable#readme>
+description:         Please see the README on GitHub at <https://github.com/nakaji-dayo/hs-swisstable#readme>
 
 dependencies:
 - base >= 4.7 && < 5
