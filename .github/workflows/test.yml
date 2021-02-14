@@ -40,4 +40,4 @@ jobs:
     - name: Run tests
       run: cabal test all
     - name: Run bench
-      run: cabal exec swisstable-bench
+      run: cabal bench all
