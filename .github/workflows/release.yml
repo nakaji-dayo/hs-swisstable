@@ -1,0 +1,23 @@
+name: Hackage release
+
+on:
+  push:
+    tags: [ '*' ]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-haskell@v1
+      with:
+        ghc-version: '8.10.3'
+        cabal-version: '3.2'
+    - name: sdist
+      run: cabal sdist
+    - name: upload
+      env:
+        HACKAGE_USERNAME: ${{ secrets.HACKAGE_USERNAME }}
+        HACKAGE_PASSWORD: ${{ secrets.HACKAGE_PASSWORD }}
+      run: |
+        cabal upload --username=${HACKAGE_USERNAME} --password=${HACKAGE_PASSWORD} dist-newstyle/sdist/*

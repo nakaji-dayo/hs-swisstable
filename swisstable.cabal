@@ -4,26 +4,29 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 9f1bc112806fef0cc34cc573dd7d8704b30025ed4ad018835854e35e569200ac
+-- hash: 2f9c118c109be85a1779a0713e0192b5bb52fcc83774f4555b155cc5e188a863
 
 name:           swisstable
 version:        0.1.0.1
-description:    Please see the README on GitHub at <https://github.com/githubuser/swisstable#readme>
-homepage:       https://github.com/githubuser/swisstable#readme
-bug-reports:    https://github.com/githubuser/swisstable/issues
-author:         Author name here
-maintainer:     example@example.com
-copyright:      2021 Author name here
+synopsis:       Google's SwissTable hash map
+description:    Please see the README on GitHub at <https://github.com/nakaji-dayo/hs-swisstable#readme>
+category:       Data
+homepage:       https://github.com/nakaji-dayo/hs-swisstable#readme
+bug-reports:    https://github.com/nakaji-dayo/hs-swisstable/issues
+author:         Daishi Nakajima
+maintainer:     nakaji.dayo@gmail.com
+copyright:      2021 Daishi Nakajima
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
 extra-source-files:
     README.md
     ChangeLog.md
+    csrc/simd.c
 
 source-repository head
   type: git
-  location: https://github.com/githubuser/swisstable
+  location: https://github.com/nakaji-dayo/hs-swisstable
 
 library
   exposed-modules:
@@ -39,11 +42,9 @@ library
       csrc/simd.c
   build-depends:
       base >=4.7 && <5
-    , deepseq
     , hashable
     , primitive
     , vector
-    , wide-word
   default-language: Haskell2010
 
 executable swisstable-bench
@@ -63,7 +64,6 @@ executable swisstable-bench
     , primitive
     , swisstable
     , vector
-    , wide-word
   default-language: Haskell2010
 
 test-suite swisstable-test
@@ -78,7 +78,6 @@ test-suite swisstable-test
   build-depends:
       QuickCheck
     , base >=4.7 && <5
-    , deepseq
     , hashable
     , primitive
     , swisstable
@@ -86,5 +85,4 @@ test-suite swisstable-test
     , tasty-discover
     , tasty-hunit
     , vector
-    , wide-word
   default-language: Haskell2010
