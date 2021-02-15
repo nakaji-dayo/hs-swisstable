@@ -24,7 +24,7 @@ dependencies:
 - base >= 4.7 && < 5
 - hashable
 - vector
-- primitive
+- primitive >= 0.7.1.0
 
 library:
   source-dirs: src
