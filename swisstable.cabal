@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5fef574e1937b884f6bad8ceedf9e2b80334d6db31ecd33f899c1aab7643f6c5
+-- hash: 29a81ae3e83dd2e11751001efac170b7e5ecb2acf51568b368ca3fd9830dd216
 
 name:           swisstable
 version:        0.1.0.2
@@ -43,7 +43,7 @@ library
   build-depends:
       base >=4.7 && <5
     , hashable
-    , primitive
+    , primitive >=0.7.1.0
     , vector
   default-language: Haskell2010
 
@@ -60,7 +60,7 @@ test-suite swisstable-test
       QuickCheck
     , base >=4.7 && <5
     , hashable
-    , primitive
+    , primitive >=0.7.1.0
     , swisstable
     , tasty
     , tasty-discover
@@ -83,7 +83,7 @@ benchmark swisstable-bench
     , deepseq
     , hashable
     , hashtables
-    , primitive
+    , primitive >=0.7.1.0
     , swisstable
     , vector
   default-language: Haskell2010
