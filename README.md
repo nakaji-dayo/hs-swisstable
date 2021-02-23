@@ -4,7 +4,7 @@
 
 ## links
 
-- [Hackage](https://hackage.haskell.org/package/swisstable-0.1.0.1)
+- [Hackage](https://hackage.haskell.org/package/swisstable)
 - [Instance definition of Data.HashTable.Class](https://github.com/nakaji-dayo/hs-swisstable-hashtables-class)
 
 ## Benchmark snapshot
