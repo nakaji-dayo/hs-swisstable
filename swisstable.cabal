@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 3a464db5ad176c11f9af7f0f80c63c627d1ff45a396ba4fbfebe96aaa2a6a5c6
+-- hash: f7eac9bee98a361930e6922ac183128e167103eb5fd312615194e71745aab24d
 
 name:           swisstable
 version:        0.1.0.2
@@ -51,7 +51,7 @@ test-suite swisstable-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Test.Basic
+      Test.Data.HashTable.ST.Swiss
       Paths_swisstable
   hs-source-dirs:
       test

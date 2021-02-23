@@ -1,4 +1,4 @@
-module Test.Basic where
+module Test.Data.HashTable.ST.Swiss where
 
 import           Prelude                  hiding (lookup)
 
