@@ -351,14 +351,5 @@ mutate :: (Eq k, Hashable k) =>
 mutate ref !k !f = mutateST ref k (pure . f)
 {-# INLINE mutate #-}
 
-{-
-試したい
-　右端で競合が発生した際に0に戻るのではなく、
-　予備領域を使い、予備領域が埋まったら拡張する。
-  -> unlikelyすぎて効果うすそう
--- make Data.HashTable.Class instance?
-  -> 両方に依存したインターフェス揃えるようlibrary作れば良い
--}
-
 getSize :: Table s k v -> ST s Int
 getSize  = fmap size . readRef
