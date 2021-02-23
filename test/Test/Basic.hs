@@ -9,6 +9,7 @@ import           Test.Tasty
 import           Test.Tasty.HUnit
 
 import           Control.Monad.ST         (stToIO)
+import           Data.List                (sort)
 import           Data.Primitive.Array     as A
 import           Data.Primitive.PrimArray
 import           Test.QuickCheck          (Gen, generate, vector)
@@ -58,7 +59,7 @@ unit_insert_right_overflow = do
 -- vのswapできるようにすべき
 unit_update :: IO ()
 unit_update = do
-  let ks = take 5 $ repeat "A"
+  let ks = replicate 5 "A"
   t <- newSized 4
   mapM_ (\x -> insert t x x) ks
   s <- getSize t
@@ -117,7 +118,7 @@ unit_foldM = do
   t <- new
   mapM_ (\k -> insert t k k) ks
   x <- S.foldM (\acc (k, _) -> pure (acc ++ k)) "" t
-  "ABC" @=? x
+  sort "ABC" @=? sort x
 
 unit_mutate :: IO ()
 unit_mutate = do
