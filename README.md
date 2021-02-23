@@ -9,6 +9,8 @@
 
 ## Benchmark snapshot
 
+### time
+
 15564c4
 ```
 benchmarking lookup(seq)/small/SwissTable
@@ -46,4 +48,15 @@ time                 1.315 ms   (1.311 ms .. 1.319 ms)
                      1.000 R²   (1.000 R² .. 1.000 R²)
 mean                 1.321 ms   (1.319 ms .. 1.322 ms)
 std dev              5.360 μs   (4.111 μs .. 6.704 μs)
+```
+
+### space
+
+8557655
+```
+Case                                    Allocated  GCs
+Swiss.insert                          362,035,256  314
+Data.HashTable.ST.Basic.insert        192,201,784  108
+Swiss.insert sized                    162,891,112  140
+Data.HashTable.ST.Basic.insert sized  152,675,336   94
 ```
