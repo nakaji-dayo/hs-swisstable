@@ -4,10 +4,10 @@ cradle:
       component: "swisstable:lib"
 
     - path: "./bench/Main.hs"
-      component: "swisstable:exe:swisstable-bench"
+      component: "swisstable:bench:swisstable-bench"
 
-    - path: "./bench/Paths_swisstable.hs"
-      component: "swisstable:exe:swisstable-bench"
+    - path: "./space/Main.hs"
+      component: "swisstable:bench:swisstable-space"
 
     - path: "./test"
       component: "swisstable:test:swisstable-test"

@@ -2,7 +2,6 @@
 module Main where
 
 import           Control.DeepSeq
-import           Control.DeepSeq         (NFData)
 import           Control.Monad
 import           Criterion
 import           Criterion.Main

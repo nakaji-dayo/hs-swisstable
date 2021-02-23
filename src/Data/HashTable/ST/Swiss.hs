@@ -98,6 +98,7 @@ rawInsert !h1' ref !k !v = do
   iterateCtrlIdx (f (mutablePrimArrayContents ctrl) size elems ctrl) size (mask .&. h1')
   modifySTRef' used (+ 1)
   checkOverflow m >>= \x -> when x $ grow ref
+  pure ()
   where
     f !ptr !size !elems !ctrl !idx = do
       let !pc = PP.advancePtr ptr idx
@@ -158,7 +159,7 @@ listBitmaskSet = map cFfs . iterate (\x -> x .&. (x - 1))
 {-# INLINE listBitmaskSet #-}
 
 iterateBitmaskSet :: Monad m => (Int -> m (Maybe a)) -> Word32 -> m (Maybe a)
-iterateBitmaskSet  !f !mask = do
+iterateBitmaskSet  f !mask = do
   let bitidxs = listBitmaskSet mask
   go bitidxs
   where
@@ -248,23 +249,23 @@ grow ref = do
   writeRef ref =<< readRef t'
   pure ()
   where
-    f t (k, v) = insert t k v
+    f t (!k, !v) = rawInsert (hash k) t k v
 
 mapM_ :: ((k, v) -> ST s a) -> Table s k v -> ST s ()
 mapM_ f ref = do
   t <- readRef ref
   let idx = 0
-  void $ iterateCtrlIdx (h t) (size t) idx
+  void $ iterateCtrlIdx (h (mutablePrimArrayContents (ctrl t)) t) (size t) idx
   where
-    g t idx bidx = do
+    g elms !idx !bidx = do
       let idx' = idx + bidx - 1
-      e <- readArray (elems t) idx'
+      !e <- readArray elms idx'
       void $ f e
       pure Nothing
-    h t idx = do
-      let pc = PP.advancePtr (mutablePrimArrayContents (ctrl t)) idx
+    h ptr t !idx = do
+      let pc = PP.advancePtr ptr idx
       let mask = cElmAddMovemask 128 pc
-      r <- iterateBitmaskSet (g t idx) mask
+      r <- iterateBitmaskSet (g (elems t) idx) mask
       if idx + 32 > size t then pure (Just Nothing) else pure r
 
 foldM :: (a -> (k,v) -> ST s a) -> a -> Table s k v -> ST s a
@@ -323,14 +324,15 @@ analyze ref = do
 mutateST' :: (Eq k, Hashable k)
          => (k -> Int) -> Table s k v -> k -> (Maybe v -> ST s (Maybe v, a)) -> ST s a
 mutateST' h ref k f = do
-  t <- readRef ref
   let !h1' = h1 h k
   lookup'' h1' ref k >>= \case
     Just (v, idx) ->
       f (Just v) >>= \case
-      (Just v', a) -> -- update
+      (Just v', a) -> do -- update
+        t <- readRef ref
         writeArray (elems t) idx (k, v') >> pure a
-      (Nothing, a) -> --delete
+      (Nothing, a) -> do--delete
+        t <- readRef ref
         deleteIdx t idx >> pure a
     Nothing ->
       f Nothing >>= \case

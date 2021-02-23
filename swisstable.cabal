@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 29a81ae3e83dd2e11751001efac170b7e5ecb2acf51568b368ca3fd9830dd216
+-- hash: 3a464db5ad176c11f9af7f0f80c63c627d1ff45a396ba4fbfebe96aaa2a6a5c6
 
 name:           swisstable
 version:        0.1.0.2
@@ -86,4 +86,23 @@ benchmark swisstable-bench
     , primitive >=0.7.1.0
     , swisstable
     , vector
+  default-language: Haskell2010
+
+benchmark swisstable-space
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  other-modules:
+      Paths_swisstable
+  hs-source-dirs:
+      space
+  ghc-options: -O2
+  build-depends:
+      base >=4.7 && <5
+    , deepseq
+    , hashable
+    , hashtables
+    , primitive >=0.7.1.0
+    , swisstable
+    , vector
+    , weigh
   default-language: Haskell2010
